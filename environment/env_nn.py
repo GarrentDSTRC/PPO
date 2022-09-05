@@ -1,7 +1,7 @@
 import logging
 import random
 import numpy as np
-
+import ACAIDataIf
 
 #logger = logging.getLogger(__name__)
 
@@ -9,18 +9,20 @@ import numpy as np
 class Env():
     def __init__(self):
 
-        self.states = list(range(16))  # 状态空间 0-15
+        self.states = list(range(160))  # 状态空间 0-15
         self.terminate_states = np.zeros(len(self.states))  # 终止状态为np格式
         self.terminate_states[4] = 1
-        self.actions = [-4, 4, -1, 1, 0]  #上下左右不动
-
-
+        self.actions = range(9)  #0-8
         self.size = 4
-
         self.viewer = None
         self.state = 15
 
+        self.acaiif = ACAIDataIf()
 
+    def wait_for_status_update(self):
+        self.acaiif.wait_for_status_update()
+    def continue_to_do_action(self):
+        self.continue_to_do_action()
     def step(self,action):             #action 01234
         # 系统当前状态
         state = self.state

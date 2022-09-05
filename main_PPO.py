@@ -28,9 +28,12 @@ for i in range(num_episodes):
 
     #policy evaluation
     for t in range(max_number_of_stepsv):
+        env.wait_for_status_update()
         prevstate=env.getstate()
         chosenAction,logpro=agent.policyAction(prevstate)
         nextstate, reward, Terminal=env.step(chosenAction)
+        env.continue_to_do_action()
+
         agent.save_r_log(reward,logpro,chosenAction,prevstate)
         #差两个函数 第一个 env.getstate(),第二个env.step 执行动作 获取state 得到reward
 
