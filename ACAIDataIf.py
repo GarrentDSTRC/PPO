@@ -436,20 +436,30 @@ class ACAIStatus(Structure):
                 ('mCOFCCStatus', COFCCStatus),
                 ('mCOMSLInGuide', COMSLInGuide)]
 
+class ACAIAction():
+    def __init__(self):
+        self.space=9
+        pass
+    def size(self):
+        return self.space
+    def choose(self,id):
+        #0飞向目标点 1平飞 2左转 3右转 4爬升 5下滑 6加速 7减速 8发射导弹
+        self.id=c_uint(id)
 
 class ACAIDataIf:
     def __init__(self):
         self.status=ACAIStatus()
+        self.action=ACAIAction()
         self.status_size = sizeof(self.status)#345016
         EVENT_ALL_ACCESS = 0x000F0000 | 0x00100000 | 0x3
         self.shm = mmap.mmap(0, self.status_size, "shared_memory")
         self.m_hEvent1 = windll.kernel32.OpenEventW(EVENT_ALL_ACCESS, True, "statusUpdateEvent")
         self.m_hEvent2 = windll.kernel32.OpenEventW(EVENT_ALL_ACCESS, True, "actionUpdateEvent")
         if (self.m_hEvent1 and self.m_hEvent2):
+            windll.kernel32.SetEvent(self.m_hEvent2)
             pass
         else:
             print("同步事件打开失败")
-            return None
 
         '''
          data=ACAIDataIf()
@@ -474,22 +484,31 @@ class ACAIDataIf:
     def wait_for_status_update(self):
         windll.kernel32.WaitForSingleObject(self.m_hEvent1, -1)
         self.shm.seek(0)
-        memmove(addressof(self.status), bytes(self.shm.read(self.status_size)), self.status_size);
+        memmove(addressof(self.status), bytes(self.shm.read(self.status_size)), self.status_size)
     def continue_to_do_action(self):
+
+        self.shm.seek(0)
+        self.shm.write(bytes(self.action.id))
         windll.kernel32.SetEvent(self.m_hEvent2)
-        #memmmove action
+
+    def isDllSynchronized(self):
+        if (self.m_hEvent1 and self.m_hEvent2):
+            return True
+        else:
+            return False
 
 import time
 if __name__ == '__main__':
     #example
     acaiif=ACAIDataIf()
-    if(acaiif):
+    if(acaiif.isDllSynchronized()):
         while True:
             acaiif.wait_for_status_update()
 
 
             #do some trainning and choose policy.....
             print((acaiif.status.mACFlightStatus.lat,acaiif.status.mACFlightStatus.lon))
+            acaiif.action.choose(2)
             #time.sleep(1)
             #......
 

@@ -1,7 +1,6 @@
 import sys
 import time
-
-import environment.env_nn as env
+import environment.env_nn as environment
 import numpy as np
 from matplotlib import pyplot as plt
 import agent.agent_PPO as ag
@@ -19,6 +18,7 @@ path="StoredTrainingData\\PPO_A.pt"
 path1="StoredTrainingData\\PPO_C.pt"
 
 agent=ag.agent_PPO()
+env=environment.Env()
 
 for i in range(num_episodes):
     e_return=0
@@ -27,15 +27,14 @@ for i in range(num_episodes):
         agent.Policy.actor=torch.load(path)
 
     #policy evaluation
+    env.wait_for_status_update()
+    env.getstate()
     for t in range(max_number_of_stepsv):
-        env.wait_for_status_update()
-        prevstate=env.getstate()
+        prevstate=env.state
         chosenAction,logpro=agent.policyAction(prevstate)
         nextstate, reward, Terminal=env.step(chosenAction)
-        env.continue_to_do_action()
-
         agent.save_r_log(reward,logpro,chosenAction,prevstate)
-        #差两个函数 第一个 env.getstate(),第二个env.step 执行动作 获取state 得到reward
+        #第二个env.step 执行动作 获取state 得到reward
 
         e_return+=reward
         if Terminal==True:
