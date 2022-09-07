@@ -40,6 +40,8 @@ class Env():
         self.state=self.getstate()
         reward=0
         Terminal=0
+        if int(action)==8:
+           reward-=35
         event=self.acaiif.check_event()
         if(self.acaiif.EVENT_PKSTART==event):
             pass
