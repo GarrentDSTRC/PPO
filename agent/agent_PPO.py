@@ -22,7 +22,9 @@ class actor(nn.Module):
         self.actor_layer = nn.Sequential(
             nn.Linear(n_states_num,hidden_size),
             nn.ReLU(),
-            nn.Linear(n_states_num, hidden_size),
+            nn.Linear(hidden_size, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size),
             nn.ReLU(),
             nn.Linear(hidden_size,n_actions_num),
             nn.Softmax(dim=1)
@@ -38,9 +40,9 @@ class critic(nn.Module):
         self.critic_layer = nn.Sequential(
             nn.Linear(n_states_num,hidden_size),
             nn.ReLU(),
-            nn.Linear(n_states_num, hidden_size),
+            nn.Linear(hidden_size, hidden_size),
             nn.ReLU(),
-            nn.Linear(n_states_num,hidden_size),
+            nn.Linear(hidden_size,hidden_size),
             nn.ReLU(),
             nn.Linear(hidden_size,n_actions_num),
         )
@@ -202,12 +204,9 @@ class Policy():
 class agent_PPO():
 
     #个性化设置
-    def __init__(self):
-        self.states = list(range(16))  # 状态空间 0-15
-        self.actions = [-4, 4, -1, 1,0]  # 上下左右
-        self.size = 5
+    def __init__(self,state_num,action_num):
         self.gamma = reward_decay
-        self.Policy=Policy(len(self.states),self.size)
+        self.Policy=Policy(state_num,action_num)
 
     def policyAction(self,observe_state):       #also do value_improvement
         self.state=observe_state

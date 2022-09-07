@@ -17,7 +17,7 @@ allrewards=np.zeros(1)
 path="StoredTrainingData\\PPO_A.pt"
 path1="StoredTrainingData\\PPO_C.pt"
 
-agent=ag.agent_PPO()
+agent=ag.agent_PPO(32,9)
 env=environment.Env()
 
 for i in range(num_episodes):
@@ -34,7 +34,7 @@ for i in range(num_episodes):
         chosenAction,logpro=agent.policyAction(prevstate)
         nextstate, reward, Terminal=env.step(chosenAction)
         agent.save_r_log(reward,logpro,chosenAction,prevstate)
-        #第二个env.step 执行动作 获取state 得到reward
+        #env.step 执行动作 获取state 得到reward
 
         e_return+=reward
         if Terminal==True:

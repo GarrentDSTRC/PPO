@@ -23,13 +23,21 @@ class Env():
         self.continue_to_do_action()
     def step(self,action):             #action 0-8
         # 系统当前状态
-        action
-        prevstate
+        self.acaiif.action.choose(int(action))
+        prevstate=self.state
         self.continue_to_do_action()
         self.wait_for_status_update()
-        self.getstate()
-        reward, Terminal
-
+        self.state=self.getstate()
+        reward=0
+        Terminal=0
+        event=self.acaiif.check_event()
+        if(self.acaiif.EVENT_PKSTART==event):
+            pass
+        elif(self.acaiif.EVENT_PKEND==event):
+            Terminal=1
+        elif(self.acaiif.EVENT_PKOUT==event):
+            print(self.acaiif.event.flightID)
+            pass
 
     def reset(self):
         #self.state = self.states[int(random.random() * len(self.states))]
@@ -73,6 +81,9 @@ class Env():
         else:
             state.append(0,0,0,0,0,0,0,0)
             state.append(0,0,0,0,0,0,0,0)
+        #导弹是否雷达告警 1X 导弹方位  1X
+        state.append(self.acaiif.ACMslWarning.mslCnt,self.acaiif.ACMslWarning.threatInfos[0].azBody)
+
         self.state=torch.tensor(state)
         return self.state
 
