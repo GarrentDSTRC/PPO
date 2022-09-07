@@ -15,7 +15,17 @@ class Env():
         self.size = 9
         self.state = []
 
+        self.myflight=2
+        self.enemyflight=2
+
         self.acaiif = ACAIDataIf()
+        if self.acaiif.status.mACFlightStatus.flightTeam==0:
+            #red 0 blue 1
+                self.TLon=self.acaiif.status.mPKConfig.RedMissionLon
+                self.TLat=self.acaiif.status.mPKConfig.RedMissionLat
+        else:
+                self.TLon= self.acaiif.status.mPKConfig.BlueMissionLon
+                self.TLat= self.acaiif.status.mPKConfig.BlueMissionLat
 
     def wait_for_status_update(self):
         self.acaiif.wait_for_status_update()
@@ -24,7 +34,7 @@ class Env():
     def step(self,action):             #action 0-8
         # 系统当前状态
         self.acaiif.action.choose(int(action))
-        prevstate=self.state
+        #prevstate=self.state
         self.continue_to_do_action()
         self.wait_for_status_update()
         self.state=self.getstate()
@@ -35,9 +45,22 @@ class Env():
             pass
         elif(self.acaiif.EVENT_PKEND==event):
             Terminal=1
+            if self.enemyflight==0 or (np.abs(self.state[5])+np.abs(self.state[6]))<0.1 or (np.abs(self.state[11]-self.TLon)+np.abs(self.state[12]-self.TLat))<0.1:
+                reward+=100
+            else: reward-=100
         elif(self.acaiif.EVENT_PKOUT==event):
-            print(self.acaiif.event.flightID)
-            pass
+            if self.acaiif.event.flightID==self.acaiif.status.mCOFlightStatus.memFlightStatus[0].flightID:
+                reward-=40
+                self.myflight-=1
+            elif self.acaiif.event.flightID==self.acaiif.status.mACFlightStatus.flightID:
+                reward-=50
+                self.myflight-=1
+            else:
+                reward+=40
+                self.enemyflight-=1
+        #目标距离reward
+        reward+=1*(0.5)**(np.abs(self.state[5])+np.abs(self.state[6]))
+        return self.state,reward, Terminal
 
     def reset(self):
         #self.state = self.states[int(random.random() * len(self.states))]
@@ -46,43 +69,38 @@ class Env():
 
     def getstate(self):
         state=[]
-        Lon=self.acaiif.ACFlightStatus.lon
-        Lat=self.acaiif.ACFlightStatus.lat
-        Alt=self.acaiif.ACFlightStatus.alt
+        Lon=self.acaiif.status.mACFlightStatus.lon
+        Lat=self.acaiif.status.mACFlightStatus.lat
+        Alt=self.acaiif.status.mACFlightStatus.alt
         #到四个边界 4X 高度  1X
-        state.append(self.acaiif.PKConfig.RightUpLon-Lon)
-        state.append(self.acaiif.PKConfig.LeftDownLon - Lon)
-        state.append(self.acaiif.PKConfig.RightUpLat - Lat)
-        state.append(self.acaiif.PKConfig.LeftDownLat - Lat)
-        state.append(Alt-self.acaiif.PKConfig.MinFlyHeight)
+        state.append(self.acaiif.status.mPKConfig.RightUpLon-Lon)
+        state.append(self.acaiif.status.mPKConfig.LeftDownLon - Lon)
+        state.append(self.acaiif.status.mPKConfig.RightUpLat - Lat)
+        state.append(self.acaiif.status.mPKConfig.LeftDownLat - Lat)
+        state.append(Alt-self.acaiif.status.mPKConfig.MinFlyHeight)
         #目标点距离方位 2X
-        if self.acaiif.ACFlightStatus.flightTeam==0:
-        #red 0 blue 1
-            state.append(Lon - self.acaiif.PKConfig.RedMissionLon)
-            state.append(Lat - self.acaiif.PKConfig.RedMissionLat)
-        else:
-            state.append(Lon - self.acaiif.PKConfig.BlueMissionLon)
-            state.append(Lat - self.acaiif.PKConfig.BlueMissionLat)
-        #速度  3X友方是否生存 1X友方距离方位 3X
-        state.append(self.acaiif.ACFlightStatus.velNWU[0],self.acaiif.ACFlightStatus.velNWU[1],self.acaiif.ACFlightStatus.velNWU[2])
-        state.append(self.acaiif.COFlightStatus.flightMemCnt-1)
 
-        state.append(Lon - self.acaiif.COFlightStatus.memFlightStatus[0].lon,Lat - self.acaiif.COFlightStatus.memFlightStatus[0].lat,Alt - self.acaiif.COFlightStatus.memFlightStatus[0].alt)
-        state.append(Lat - self.acaiif.PKConfig.BlueMissionLat)
+        state.append(Lon - self.TLon)
+        state.append(Lat - self.TLat)
+        #速度  3X友方是否生存 1X友方距离方位 3X
+        state.append(self.acaiif.status.mACFlightStatus.velNWU[0],self.acaiif.status.mACFlightStatus.velNWU[1],self.acaiif.status.mACFlightStatus.velNWU[2])
+        state.append(self.acaiif.status.mCOFlightStatus.flightMemCnt-1)
+        state.append(Lon - self.acaiif.status.mCOFlightStatus.memFlightStatus[0].lon,Lat - self.acaiif.status.mCOFlightStatus.memFlightStatus[0].lat,Alt - self.acaiif.status.mCOFlightStatus.memFlightStatus[0].alt)
+        state.append(Lat - self.acaiif.status.mPKConfig.BlueMissionLat)
         #敌方是否被探测 1x速度 3X方位 2X距离 1X 进入角 1X} * x2
-        if self.acaiif.ACRdrTarget.tgtCnt>=1:
-            state.append(1,self.acaiif.ACRdrTarget.tgtInfos[0].sbsSpeed,Lon-self.acaiif.ACRdrTarget.tgtInfos[0].lon,Lat-self.acaiif.ACRdrTarget.tgtInfos[0].lat,Alt-self.acaiif.ACRdrTarget.tgtInfos[0].Alt)
-            state.append(self.acaiif.ACRdrTarget.tgtInfos[0].slantRange,self.acaiif.ACRdrTarget.tgtInfos[0].aspect)
+        if self.acaiif.status.mACRdrTarget.tgtCnt>=1:
+            state.append(1,self.acaiif.status.mACRdrTarget.tgtInfos[0].sbsSpeed,Lon-self.acaiif.status.mACRdrTarget.tgtInfos[0].lon,Lat-self.acaiif.status.mACRdrTarget.tgtInfos[0].lat,Alt-self.acaiif.status.mACRdrTarget.tgtInfos[0].Alt)
+            state.append(self.acaiif.status.mACRdrTarget.tgtInfos[0].slantRange,self.acaiif.status.mACRdrTarget.tgtInfos[0].aspect)
             if self.acaiif.ACRdrTarget.tgtCnt>1:
-                state.append(1,self.acaiif.ACRdrTarget.tgtInfos[1].sbsSpeed,Lon-self.acaiif.ACRdrTarget.tgtInfos[1].lon,Lat-self.acaiif.ACRdrTarget.tgtInfos[1].lat,Alt-self.acaiif.ACRdrTarget.tgtInfos[1].Alt)
-                state.append(self.acaiif.ACRdrTarget.tgtInfos[1].slantRange,self.acaiif.ACRdrTarget.tgtInfos[1].aspect)
+                state.append(1,self.acaiif.status.mACRdrTarget.tgtInfos[1].sbsSpeed,Lon-self.acaiif.status.mACRdrTarget.tgtInfos[1].lon,Lat-self.acaiif.status.mACRdrTarget.tgtInfos[1].lat,Alt-self.acaiif.status.mACRdrTarget.tgtInfos[1].Alt)
+                state.append(self.acaiif.status.mACRdrTarget.tgtInfos[1].slantRange,self.acaiif.status.mACRdrTarget.tgtInfos[1].aspect)
             else:
                 state.append(0,0,0,0,0,0,0,0)
         else:
             state.append(0,0,0,0,0,0,0,0)
             state.append(0,0,0,0,0,0,0,0)
         #导弹是否雷达告警 1X 导弹方位  1X
-        state.append(self.acaiif.ACMslWarning.mslCnt,self.acaiif.ACMslWarning.threatInfos[0].azBody)
+        state.append(self.acaiif.status.mACMslWarning.mslCnt,self.acaiif.status.mACMslWarning.threatInfos[0].azBody)
 
         self.state=torch.tensor(state)
         return self.state
