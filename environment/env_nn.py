@@ -3,7 +3,7 @@ import random
 import numpy as np
 import torch
 import ACAIDataIf
-from geographiclib.geodesic import Geodesic
+#from geographiclib.geodesic import Geodesic
 
 #logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ class Env():
         self.myflight=2
         self.enemyflight=2
 
-        self.acaiif = ACAIDataIf()
+        self.acaiif = ACAIDataIf.ACAIDataIf()
         if self.acaiif.status.mACFlightStatus.flightTeam==0:
             #red 0 blue 1
                 self.TLon=self.acaiif.status.mPKConfig.RedMissionLon
