@@ -42,24 +42,24 @@ class Env():
         Terminal=0
         if int(action)==8:
            reward-=35
-        event=self.acaiif.check_event()
-        if(self.acaiif.EVENT_PKSTART==event):
-            pass
-        elif(self.acaiif.EVENT_PKEND==event):
-            Terminal=1
-            if self.enemyflight==0 or (np.abs(self.state[5])+np.abs(self.state[6]))<0.1 or (np.abs(self.state[11]-self.TLon)+np.abs(self.state[12]-self.TLat))<0.1:
-                reward+=100
-            else: reward-=100
-        elif(self.acaiif.EVENT_PKOUT==event):
-            if self.acaiif.event.flightID==self.acaiif.status.mCOFlightStatus.memFlightStatus[0].flightID:
-                reward-=40
-                self.myflight-=1
-            elif self.acaiif.event.flightID==self.acaiif.status.mACFlightStatus.flightID:
-                reward-=50
-                self.myflight-=1
-            else:
-                reward+=40
-                self.enemyflight-=1
+        for event in self.acaiif.check_event():
+            if(self.acaiif.EVENT_PKSTART==event.type):
+                pass
+            elif(self.acaiif.EVENT_PKEND==event.type):
+                Terminal=1
+                if self.enemyflight==0 or (np.abs(self.state[5])+np.abs(self.state[6]))<0.1 or (np.abs(self.state[11]-self.TLon)+np.abs(self.state[12]-self.TLat))<0.1:
+                    reward+=100
+                else: reward-=100
+            elif(self.acaiif.EVENT_PKOUT==event.type):
+                if self.acaiif.event.flightID==self.acaiif.status.mCOFlightStatus.memFlightStatus[0].flightID:
+                    reward-=40
+                    self.myflight-=1
+                elif self.acaiif.event.flightID==self.acaiif.status.mACFlightStatus.flightID:
+                    reward-=50
+                    self.myflight-=1
+                else:
+                    reward+=40
+                    self.enemyflight-=1
         #目标距离reward
         reward+=1*(0.5)**(np.abs(self.state[5])+np.abs(self.state[6]))
         return self.state,reward, Terminal
@@ -89,6 +89,7 @@ class Env():
         state.append(self.acaiif.status.mCOFlightStatus.flightMemCnt-1)
         state.append(Lon - self.acaiif.status.mCOFlightStatus.memFlightStatus[0].lon,Lat - self.acaiif.status.mCOFlightStatus.memFlightStatus[0].lat,Alt - self.acaiif.status.mCOFlightStatus.memFlightStatus[0].alt)
         state.append(Lat - self.acaiif.status.mPKConfig.BlueMissionLat)
+
         #敌方是否被探测 1x速度 3X方位 2X距离 1X 进入角 1X} * x2
         if self.acaiif.status.mACRdrTarget.tgtCnt>=1:
             state.append(1,self.acaiif.status.mACRdrTarget.tgtInfos[0].sbsSpeed,Lon-self.acaiif.status.mACRdrTarget.tgtInfos[0].lon,Lat-self.acaiif.status.mACRdrTarget.tgtInfos[0].lat,Alt-self.acaiif.status.mACRdrTarget.tgtInfos[0].Alt)
