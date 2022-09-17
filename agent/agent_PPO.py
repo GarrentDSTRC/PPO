@@ -7,12 +7,10 @@ import torch.nn.functional as F
 #from replay_buffer import ReplayBuffer
 #from agent.PrioritizedBuffer import NaivePrioritizedBuffer as Pbuffer
 
-REPLAY_MEMORY = 500 # number of previous transitions to remember
-BATCH_SIZE = 32 # size of minibatch
 reward_decay=0.8
 eps_clip=0.2
 K_epochs=10
-learning_rate=0.1
+learning_rate=0.001
 
 class actor(nn.Module):
 
@@ -24,14 +22,29 @@ class actor(nn.Module):
             nn.ReLU(),
             nn.Linear(hidden_size, hidden_size),
             nn.ReLU(),
-            nn.Linear(hidden_size, hidden_size),
-            nn.ReLU(),
             nn.Linear(hidden_size,n_actions_num),
             nn.Softmax(dim=1)
         )
+        self.initialize_weights()
 
     def forward(self,inputs):
         return self.actor_layer(inputs)
+
+    def initialize_weights(self):
+        """
+        遍历每一层，判断各层属于什么类型，根据不同类型的层，设定不同的权值初始化方法
+        """
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                torch.nn.init.xavier_normal_(m.weight.data)
+                if m.bias is not None:
+                    m.bias.data.zero_()
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+            elif isinstance(m, nn.Linear):
+                torch.nn.init.normal_(m.weight.data, 0, 0.01)
+                m.bias.data.zero_()
 
 class critic(nn.Module):
 
@@ -42,9 +55,7 @@ class critic(nn.Module):
             nn.ReLU(),
             nn.Linear(hidden_size, hidden_size),
             nn.ReLU(),
-            nn.Linear(hidden_size,hidden_size),
-            nn.ReLU(),
-            nn.Linear(hidden_size,n_actions_num),
+            nn.Linear(hidden_size,1),
         )
 
     def forward(self,inputs):
@@ -67,15 +78,14 @@ class Policy():
         #网络
         self.actor = actor(n_states_num, n_actions_num, 128)
         self.critic=critic(n_states_num, n_actions_num, 128)
-
         self.actor_old = actor(n_states_num, n_actions_num, 128)
         self.critic_old=critic(n_states_num, n_actions_num, 128)
 
         self.critic_old.load_state_dict(self.critic.state_dict())
         self.actor_old.load_state_dict(self.actor.state_dict())
         #优化器
-        self.optimizerA = torch.optim.SGD(self.actor.parameters(), lr=learning_rate)
-        self.optimizerC = torch.optim.SGD(self.critic.parameters(), lr=learning_rate)
+        self.optimizerA = torch.optim.Adam(self.actor.parameters(), lr=learning_rate)
+        self.optimizerC = torch.optim.Adam(self.critic.parameters(), lr=learning_rate)
 
         self.MseLoss = nn.MSELoss()
 
@@ -98,7 +108,7 @@ class Policy():
         pack=list(zip(*self.data))
 
         old_rewards=torch.tensor(pack[0]).detach()
-        old_states=torch.tensor(pack[3]).detach()
+        old_states=torch.reshape( torch.cat(pack[3],dim=0).detach().unsqueeze(0), (-1,30))
         old_actions=torch.tensor(pack[2]).detach()
         old_logpros=torch.tensor(pack[1]).detach()
 
@@ -116,7 +126,8 @@ class Policy():
             surr1 = ratios * advantages
             surr2 = torch.clamp(ratios, 1 - self.eps_clip, 1 + self.eps_clip) * advantages
             actorloss = -torch.min(surr1, surr2)
-            criticloss= + 0.5 * self.MseLoss(state_values, reward_to_go)
+            #criticloss= + 0.5 * self.MseLoss(state_values, reward_to_go)
+            criticloss = + 0.5 * torch.mean((state_values- reward_to_go)**2)
             loss=actorloss+criticloss- 0.01 * dist_entropy
 
             # take gradient step
@@ -124,6 +135,8 @@ class Policy():
             self.optimizerA.zero_grad()
             loss.mean().backward()
             self.optimizerC.step()
+
+            logprobs, state_values, dist_entropy = self.evaluate_action(old_states, old_actions)
             self.optimizerA.step()
 
         self.cost_his.append(float(loss.mean()))
@@ -135,7 +148,10 @@ class Policy():
         self.data = []  # 清空轨迹
 
     def compute_gae(self,Last_next_value, rewards,  values, gamma=0.99, tau=0.95):
-        values = torch.cat((values , torch.tensor(Last_next_value).unsqueeze(0)),0)
+        Last_next_value = torch.tensor(Last_next_value)
+        #print(values.dim(), Last_next_value.dim())
+        values = torch.cat((values, Last_next_value.unsqueeze(0)),0)
+        #values = torch.cat((values, Last_next_value), 0)
         gae = 0
         returns = []
         for step in reversed(range(len(rewards))):
@@ -147,16 +163,10 @@ class Policy():
     #将状态传入神经网络 根据概率选择动作
     def  choose_action(self,state):
         state = torch.as_tensor(state)
-        if state.dim()!=0:
-            states=torch.zeros(state.size,16)  #(*,16)
-            for i in range(state.size):
-                states[state[i],i]=1
-        else:
-            states=torch.zeros(1,16)
-            states[0,int(state)]=1
-
-        #将state转化成tensor one-hot vector 并且维度转化为[16]->[1,16]  unsqueeze(0)在第0个维度上切片
+        states=state.unsqueeze(0)
+        #将state维度转化为[x]->[1,x]  unsqueeze(0)在第0个维度上切片
         prob = self.actor(states)  # 动作分布:
+        #print("神经网络输出概率",prob)
         # 从类别分布中采样1个动作
         m = torch.distributions.Categorical(prob)  # 生成分布
         action = m.sample()
@@ -167,14 +177,11 @@ class Policy():
     def  evaluate_action(self,state,action):
         state = torch.as_tensor(state)
         if state.dim()!=0 :
-            states=torch.zeros(state.shape[0],16)  #(*,16)
-            for i in range(state.shape[0]):
-                states[i,int(state[i])]=1
+            states=state
         else:
-            states=torch.zeros(1,16)
-            states[0,int(state)]=1
+            states=state.unsqueeze(0)
 
-        #将state转化成tensor one-hot vector 并且维度转化为[16]->[1,16]  unsqueeze(0)在第0个维度上切片
+        #将state维度转化为[x]->[1,x]  unsqueeze(0)在第0个维度上切片
 
         prob = self.actor(states)  # 动作分布:
         # 从类别分布中采样1个动作
@@ -182,9 +189,9 @@ class Policy():
         dist_entropy = m.entropy()
 
         action_logprobs =m.log_prob(action)
-        action = m.sample()
 
         value=self.critic.forward(states)
+        #print("value",value)
 
         return action_logprobs, torch.squeeze(value),dist_entropy
 

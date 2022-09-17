@@ -445,17 +445,31 @@ class ACAIAction():
     def choose(self,id):
         #0飞向目标点 1平飞 2左转 3右转 4爬升 5下滑 6加速 7减速 8发射导弹
         self.id=c_uint(id)
-
+class ACAIEvent(Structure):
+    _fields_=[('type',c_int),
+              ('flightID',c_uint)]
+class ACAIEventList(Structure):
+    _fields_ = [('n', c_int),
+                ('event', ACAIEvent*8)]
 class ACAIDataIf:
+    EVENT_PKSTART=0
+    EVENT_PKEND=1
+    EVENT_PKOUT=2
     def __init__(self):
         self.status=ACAIStatus()
         self.action=ACAIAction()
+        self.event=ACAIEvent()
+        self.event_list=ACAIEventList()
         self.status_size = sizeof(self.status)#345016
+        self.event_size=sizeof(self.event_list)
         EVENT_ALL_ACCESS = 0x000F0000 | 0x00100000 | 0x3
         self.shm = mmap.mmap(0, self.status_size, "shared_memory")
+        self.shem = mmap.mmap(0, self.event_size, "event_memory")
         self.m_hEvent1 = windll.kernel32.OpenEventW(EVENT_ALL_ACCESS, True, "statusUpdateEvent")
         self.m_hEvent2 = windll.kernel32.OpenEventW(EVENT_ALL_ACCESS, True, "actionUpdateEvent")
-        if (self.m_hEvent1 and self.m_hEvent2):
+        self.m_hEvent3 = windll.kernel32.OpenEventW(EVENT_ALL_ACCESS, True, "eventUpdateEvent")
+        self.m_hEvent4 = windll.kernel32.OpenEventW(EVENT_ALL_ACCESS, True, "eventCallbackEvent")
+        if (self.m_hEvent1 and self.m_hEvent2 and self.m_hEvent3):
             windll.kernel32.SetEvent(self.m_hEvent2)
             pass
         else:
@@ -486,16 +500,34 @@ class ACAIDataIf:
         self.shm.seek(0)
         memmove(addressof(self.status), bytes(self.shm.read(self.status_size)), self.status_size)
     def continue_to_do_action(self):
-
         self.shm.seek(0)
         self.shm.write(bytes(self.action.id))
         windll.kernel32.SetEvent(self.m_hEvent2)
 
     def isDllSynchronized(self):
-        if (self.m_hEvent1 and self.m_hEvent2):
+        if (self.m_hEvent1 and self.m_hEvent2 and self.m_hEvent3):
             return True
         else:
             return False
+    def check_event(self):
+        l = list()
+        if(0==windll.kernel32.WaitForSingleObject(self.m_hEvent3,0)):
+            self.shem.seek(0)
+            memmove(addressof(self.event_list), bytes(self.shem.read(self.event_size)), self.event_size)
+            #windll.kernel32.SetEvent(self.m_hEvent4)
+
+            for i in range(self.event_list.n):
+                l.append(self.event_list.event[i])
+            #print(self.event_list.n)
+            self.event_list.n=0
+            self.shem.seek(0)
+            self.shem.write(bytes(self.event_list))
+
+        else:
+            #windll.kernel32.SetEvent(self.m_hEvent4)
+            #self.event.type=3
+            pass
+        return l
 
 import time
 if __name__ == '__main__':
@@ -503,15 +535,27 @@ if __name__ == '__main__':
     acaiif=ACAIDataIf()
     if(acaiif.isDllSynchronized()):
         while True:
+
+            for event in acaiif.check_event():
+                if(ACAIDataIf.EVENT_PKSTART==event.type):
+                    print("pkstart")
+                    pass
+                elif(ACAIDataIf.EVENT_PKEND==event.type):
+                    print("pkend")
+                    pass
+                elif(ACAIDataIf.EVENT_PKOUT==event.type):
+                    print("pkout")
+                    print(acaiif.event.flightID)
+                    pass
+                else:
+                    pass
+
             acaiif.wait_for_status_update()
 
-
             #do some trainning and choose policy.....
-            print((acaiif.status.mACFlightStatus.lat,acaiif.status.mACFlightStatus.lon))
-            acaiif.action.choose(2)
+            #print((acaiif.status.mACFlightStatus.lat,acaiif.status.mACFlightStatus.lon))
+
+            acaiif.action.choose(8)
             #time.sleep(1)
             #......
-
-
-
             acaiif.continue_to_do_action()
